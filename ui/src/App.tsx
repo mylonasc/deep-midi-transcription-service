@@ -3,6 +3,10 @@ import MidiPlayer from "./components/MidiPlayer";
 import JobCard, { ACTIVE } from "./components/JobCard";
 import ArtifactList from "./components/ArtifactList";
 import ModelHealth from "./components/ModelHealth";
+import Notice from "./components/ui/Notice";
+import EmptyState from "./components/ui/EmptyState";
+import SiteHeader from "./app/SiteHeader";
+import WorkspaceTabs from "./app/WorkspaceTabs";
 import { api, type Job } from "./lib/api";
 
 const VisualizationWorkspace = lazy(() => import("./visualization/VisualizationWorkspace"));
@@ -72,31 +76,18 @@ export default function App() {
 
   return <>
     <a className="skip-link" href="#main">Skip to content</a>
-    <header className="site-header"><div className="header-inner">
-      <div className="brand-mark" aria-hidden="true">♫</div>
-      <div><p className="eyebrow">DEEP MIDI</p><h1>Your music, transcribed.</h1><p className="header-copy">From YouTube to MIDI, in one queue.</p></div>
-      <span className={`connection ${connectionError ? "offline" : ""}`}><span aria-hidden="true">●</span> {connectionError ? "Reconnecting" : loaded ? "Connected" : "Connecting"}</span>
-    </div></header>
+    <SiteHeader loaded={loaded} connectionError={connectionError} />
 
     <main id="main" className="app-shell">
-      <div className="app-tabs" role="tablist" aria-label="Workspace" onKeyDown={event => {
-        if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
-          event.preventDefault();
-          const next = event.key === "Home" ? "jobs" : event.key === "End" ? "visualization" : tab === "jobs" ? "visualization" : "jobs";
-          setTab(next); document.getElementById(`tab-${next}`)?.focus();
-        }
-      }}>
-        <button id="tab-jobs" role="tab" aria-selected={tab === "jobs"} aria-controls="panel-jobs" tabIndex={tab === "jobs" ? 0 : -1} onClick={() => setTab("jobs")}>Jobs & artifacts</button>
-        <button id="tab-visualization" role="tab" aria-selected={tab === "visualization"} aria-controls="panel-visualization" tabIndex={tab === "visualization" ? 0 : -1} onClick={() => setTab("visualization")}>Visualization</button>
-      </div>
+      <WorkspaceTabs tab={tab} onChange={setTab} />
       {tab === "jobs" ? <div id="panel-jobs" role="tabpanel" aria-labelledby="tab-jobs">
       <div className="summary-grid" aria-label="Job summary">
         <div><strong>{active}</strong><span>In progress</span></div>
         <div><strong>{completed}</strong><span>Complete</span></div>
         <div><strong>{failed}</strong><span>Need attention</span></div>
       </div>
-      {connectionError && <div className="notice" role="alert">Could not refresh jobs. Retrying automatically. <span>{connectionError}</span></div>}
-      {error && <div className="notice" role="alert"><span>{error}</span><button onClick={() => setError(null)}>Dismiss</button></div>}
+      {connectionError && <Notice>Could not refresh jobs. Retrying automatically. <span>{connectionError}</span></Notice>}
+      {error && <Notice onDismiss={() => setError(null)}>{error}</Notice>}
 
       <div className="workspace">
         <section className="panel queue-panel" aria-labelledby="queue-heading">
@@ -126,7 +117,7 @@ export default function App() {
           </div>
           <p className="live-caption">Status refreshes every 2 seconds</p>
           {!loaded ? <div className="empty-state" role="status">Loading jobs…</div>
-            : visible.length === 0 ? <div className="empty-state"><h3>{jobs.length ? "No matching jobs" : "Your queue is ready"}</h3><p>{jobs.length ? "Choose another status to see more jobs." : "Add a YouTube link to create your first transcription."}</p></div>
+            : visible.length === 0 ? <EmptyState title={jobs.length ? "No matching jobs" : "Your queue is ready"}>{jobs.length ? "Choose another status to see more jobs." : "Add a YouTube link to create your first transcription."}</EmptyState>
             : <div className="job-list">{visible.map(job => <JobCard key={job.id} job={job} busy={busy.has(job.id)} onAction={(id, operation) => void action(id, operation)} onPlay={preview} />)}</div>}
         </section>
       </div>

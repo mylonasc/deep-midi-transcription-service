@@ -1,3 +1,5 @@
+@import "./styles/tokens.css";
+
 :root {
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
   color: #212538; background: #f5f6fa; color-scheme: light;
@@ -41,7 +43,7 @@ label { display: block; font-size: .875rem; font-weight: 600; margin-bottom: .5r
 .header-copy { color: #c4c1d7; margin-top: .6rem; font-size: .9rem; }
 .connection { font-size: .75rem; color: #d7f5e9; display: flex; gap: 6px; align-items: center; width: 100%; }
 .connection.offline { color: #ffd4ac; }
-.app-shell { max-width: 1240px; margin: auto; padding: 20px 12px; }
+.app-shell { max-width: 1240px; margin: auto; padding: 20px 12px calc(20px + var(--safe-bottom)); }
 .summary-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 24px; }
 .summary-grid > div { min-width: 0; background: white; border: 1px solid var(--border); border-radius: 12px; padding: 14px 10px; }
 .summary-grid strong { display: block; font-size: 1.6rem; letter-spacing: -.04em; }
@@ -146,7 +148,7 @@ footer { color: var(--muted); font-size: .75rem; text-align: center; padding: 32
 .visualization-workspace input[type=range] { width: 100%; min-height: 44px; }
 @media (min-width: 640px) { .visual-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (min-width: 480px) {
-  .app-shell { padding: 24px; }
+  .app-shell { padding: 24px 24px calc(24px + var(--safe-bottom)); }
   .header-inner { padding: 32px 24px; }
   .brand-mark { display: flex; }
   .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
