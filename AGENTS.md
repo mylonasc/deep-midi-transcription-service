@@ -125,11 +125,20 @@ New backends must preserve these semantics and the protocol contracts.
 
 - `ui/src/lib/api.ts`: typed API client, relative `/api` base URL, and job-list
   pagination.
-- `ui/src/App.tsx`: queue form with per-job options, polling status list,
-  connection/error feedback, status filtering, and player selection.
+- `ui/src/app/SiteHeader.tsx` and `WorkspaceTabs.tsx`: header/connection indicator
+  and tab switcher (arrow-key nav). No data logic.
+- `ui/src/components/ui/Notice.tsx` and `EmptyState.tsx`: shared alert banners and
+  placeholder panels.
+- `ui/src/features/jobs/QueueForm.tsx` and `JobsSection.tsx`: queue form and
+  summary/filter/cards. `ui/src/features/artifacts/ArtifactLibrary.tsx`: grouped
+  artifact lists.
+- `ui/src/lib/useJobPolling.ts`: 2s job-list polling with disposal.
+- `ui/src/styles/tokens.css`: spacing/type/radius/safe-area tokens imported by
+  `index.css`, which also carries the sticky mobile transport, skeleton shimmer
+  (disabled under reduced motion), and safe-area padding.
 - `ui/src/components/JobCard.tsx`: mobile-first job cards, progress, expandable
   error diagnostics, retry/cancel/delete actions, and per-job pending state.
-- `ui/src/components/ArtifactList.tsx`: responsive queued/audio/MIDI artifact lists.
+- `ui/src/features/artifacts/ArtifactLibrary.tsx`: responsive queued/audio/MIDI artifact lists.
 - `ui/src/components/ModelHealth.tsx`: model availability next to model selection,
   refreshed every 15 seconds or manually. Failed checks must not show stale green
   availability indicators; downloads-on-first-use are distinct from local failures.
@@ -175,9 +184,10 @@ no backend transcription or storage changes are needed. Keep these layers separa
   and one shared Tone.js preview engine (short-lookahead scheduling, user-gesture
   start, sustained-note restoration, disposal on song change). Both views consume the
   same position/seek API so roll and tabs stay synchronized.
-- `VisualizationWorkspace.tsx`: song/track/view selection, cancellable MIDI
-  loading, shared transport (play/pause/restart/slider), notation auto-paging and
-  measure/page seeking, and composition of these independent components.
+- `Transport.tsx`, `PageNavigator.tsx`, `useVisualizationState.ts`: shared playback
+  transport, page/measure seeking, and notation-view state (selection, auto-follow,
+  cursor fraction). `VisualizationWorkspace.tsx` stays a thin composition over song
+  selection, cancellable MIDI loading with skeleton feedback, and these parts.
 
 Prototype limitations: notation assumes 4/4 and quantizes to sixteenths, four
 measures per page; meter/tempo changes, expressive effects and percussion notation
@@ -191,6 +201,10 @@ mapping under tempo changes. Wide notation/roll content may
 scroll within their own containers, never force horizontal page overflow.
 Playwright tests exercise real alphaTab SVG rendering on mobile/desktop, alphaTex
 parsing, fret assignment invariants, and independent all-instrument piano-roll data.
+`tests/devices.ts` + `tests/e2e-journey.spec.ts` run the full queue → artifacts →
+preview → synchronized-visualization journey on five phones (iPhone SE/14/14 Pro
+Max, Pixel 7, Galaxy S22) plus a desktop control, asserting layout overflow,
+44px targets, and labelled controls per device.
 
 ## Running and testing
 

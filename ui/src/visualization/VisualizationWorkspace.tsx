@@ -57,7 +57,7 @@ function MidiVisualization({ jobId }: { jobId: string }) {
     return () => abort.abort();
   }, [jobId]);
   if (error) return <p role="alert" className="notice">{error}</p>;
-  if (!song) return <p role="status">Loading MIDI visualization…</p>;
+  if (!song) return <div aria-busy="true"><div className="skeleton skeleton-line" aria-hidden="true" /><div className="skeleton skeleton-block" aria-hidden="true" /><p role="status">Loading MIDI visualization…</p></div>;
   if (!song.tracks.length) return <p className="empty-state">This MIDI contains no notes to visualize.</p>;
   return <SongViews key={song.duration} song={song} />;
 }

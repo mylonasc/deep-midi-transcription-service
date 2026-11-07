@@ -29,6 +29,12 @@ export default function App() {
 
   const playerJob = jobs.find(job => job.id === selected) ?? jobs.find(job => job.midi_key);
 
+  function selectTab(next: string) {
+    setTab(next);
+    requestAnimationFrame(() => document
+      .getElementById(next === "jobs" ? "panel-jobs" : "panel-visualization")?.focus({ preventScroll: true }));
+  }
+
   function preview(id: string) {
     setSelected(id);
     requestAnimationFrame(() => document.getElementById("player")?.scrollIntoView({ behavior: "smooth", block: "start" }));
@@ -39,8 +45,8 @@ export default function App() {
     <SiteHeader loaded={loaded} connectionError={connectionError} />
 
     <main id="main" className="app-shell">
-      <WorkspaceTabs tab={tab} onChange={setTab} />
-      {tab === "jobs" ? <div id="panel-jobs" role="tabpanel" aria-labelledby="tab-jobs">
+      <WorkspaceTabs tab={tab} onChange={selectTab} />
+      {tab === "jobs" ? <div id="panel-jobs" role="tabpanel" aria-labelledby="tab-jobs" tabIndex={-1}>
       {connectionError && <Notice>Could not refresh jobs. Retrying automatically. <span>{connectionError}</span></Notice>}
       {error && <Notice onDismiss={() => setError(null)}>{error}</Notice>}
 
@@ -52,7 +58,7 @@ export default function App() {
 
       {playerJob?.midi_key && <section id="player" className="player-section" aria-label="MIDI preview"><p className="eyebrow">LISTEN BACK</p><h2>MIDI preview</h2><MidiPlayer midiUrl={api.midiUrl(playerJob.id)} title={playerJob.title || playerJob.id} /></section>}
       <ArtifactLibrary jobs={jobs} onPlay={preview} />
-      </div> : <div id="panel-visualization" role="tabpanel" aria-labelledby="tab-visualization"><Suspense fallback={<p role="status">Loading visualization tools…</p>}><VisualizationWorkspace jobs={jobs} /></Suspense></div>}
+      </div> : <div id="panel-visualization" role="tabpanel" aria-labelledby="tab-visualization" tabIndex={-1}><Suspense fallback={<p role="status">Loading visualization tools…</p>}><VisualizationWorkspace jobs={jobs} /></Suspense></div>}
       <footer>Deep MIDI · Powered by muscriptor</footer>
     </main>
   </>;
