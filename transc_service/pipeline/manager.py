@@ -7,7 +7,7 @@ import logging
 import tempfile
 from pathlib import Path
 
-from ..models import TERMINAL, Job, JobConfig, JobStatus
+from ..models import TERMINAL, Job, JobConfig, JobProgress, JobStatus
 from ..stores import MetadataStore, ObjectStore
 from .downloader import download_audio
 from .transcriber import transcribe_audio
@@ -25,6 +25,7 @@ class JobManager:
         self._active = {}
         self._tasks = []
         self._stopping = False
+        self._retry_lock = asyncio.Lock()
 
     async def start(self):
         self._stopping = False
@@ -37,7 +38,7 @@ class JobManager:
                     job.status = JobStatus.QUEUED
                     await self._meta.update(job)
                     self._cancel[job.id] = asyncio.Event()
-                    self._queue.put_nowait(job.id)
+                    self._queue.put_nowait((job.id, job.retry_count))
             if len(jobs) < 500:
                 break
             offset += len(jobs)
@@ -56,8 +57,28 @@ class JobManager:
     async def submit(self, youtube_url: str, config: JobConfig | None = None):
         job = await self._meta.create(Job(youtube_url=youtube_url, config=config or JobConfig()))
         self._cancel[job.id] = asyncio.Event()
-        self._queue.put_nowait(job.id)
+        self._queue.put_nowait((job.id, job.retry_count))
         return job
+
+    async def retry(self, job_id):
+        """Retry in place with original options; retain completed downloads."""
+        async with self._retry_lock:
+            job = await self._meta.get(job_id)
+            if job is None:
+                return None
+            if job.status not in {JobStatus.FAILED, JobStatus.CANCELLED}:
+                raise ValueError("only failed or cancelled jobs can be retried")
+            active = self._active.get(job_id)
+            if active:
+                await asyncio.shield(active)
+            job.status, job.error = JobStatus.QUEUED, None
+            job.retry_count += 1
+            job.progress = JobProgress(download_progress=1.0 if job.audio_key else None)
+            await self._meta.update(job)
+            self._cancel[job_id] = asyncio.Event()
+            # Attempt token invalidates old queue entries from a cancelled attempt.
+            self._queue.put_nowait((job.id, job.retry_count))
+            return job
 
     async def cancel(self, job_id):
         job = await self._meta.get(job_id)
@@ -84,8 +105,15 @@ class JobManager:
 
     async def _worker(self):
         while not self._stopping:
-            job_id = await self._queue.get()
-            task = asyncio.create_task(self._run(job_id))
+            job_id, attempt = await self._queue.get()
+            queued_job = await self._meta.get(job_id)
+            if queued_job is None or queued_job.retry_count != attempt or queued_job.status != JobStatus.QUEUED:
+                self._queue.task_done()
+                continue
+            if job_id in self._active and not self._active[job_id].done():
+                self._queue.task_done()
+                continue
+            task = asyncio.create_task(self._run(job_id, attempt))
             self._active[job_id] = task
             try:
                 await task
@@ -94,12 +122,13 @@ class JobManager:
             except Exception:
                 log.exception("Worker failed for job %s", job_id)
             finally:
-                self._active.pop(job_id, None)
+                if self._active.get(job_id) is task:
+                    self._active.pop(job_id, None)
                 self._queue.task_done()
 
-    async def _run(self, job_id):
+    async def _run(self, job_id, attempt):
         job = await self._meta.get(job_id)
-        if job is None or job.status in TERMINAL:
+        if job is None or job.status != JobStatus.QUEUED or job.retry_count != attempt:
             return
         cancel = self._cancel.setdefault(job_id, asyncio.Event())
 

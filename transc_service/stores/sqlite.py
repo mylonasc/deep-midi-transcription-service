@@ -39,6 +39,7 @@ def _row_to_job(row: aiosqlite.Row) -> Job:
         midi_key=row["midi_key"],
         events_key=row["events_key"],
         error=row["error"],
+        retry_count=row["retry_count"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )
@@ -56,6 +57,8 @@ class SqliteMetadataStore:
                 columns = {row[1] for row in await cur.fetchall()}
             if "events_key" not in columns:
                 await db.execute("ALTER TABLE jobs ADD COLUMN events_key TEXT")
+            if "retry_count" not in columns:
+                await db.execute("ALTER TABLE jobs ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0")
             await db.execute("PRAGMA journal_mode=WAL")
             await db.commit()
 
@@ -64,14 +67,15 @@ class SqliteMetadataStore:
             db.row_factory = aiosqlite.Row
             await db.execute(
                 """INSERT INTO jobs (id,youtube_url,status,config_json,progress_json,
-                title,duration_s,audio_key,midi_key,error,created_at,updated_at,events_key)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                title,duration_s,audio_key,midi_key,error,created_at,updated_at,events_key,retry_count)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     job.id, job.youtube_url, job.status.value,
                     job.config.model_dump_json(), job.progress.model_dump_json(),
                     job.title, job.duration_s, job.audio_key, job.midi_key,
                     job.error, job.created_at.isoformat(), job.updated_at.isoformat(),
                     job.events_key,
+                    job.retry_count,
                 ),
             )
             await db.commit()
@@ -102,12 +106,12 @@ class SqliteMetadataStore:
         async with aiosqlite.connect(self._db_path) as db:
             await db.execute(
                 """UPDATE jobs SET status=?, config_json=?, progress_json=?, title=?,
-                   duration_s=?, audio_key=?, midi_key=?, error=?, updated_at=?, events_key=? WHERE id=?""",
+                   duration_s=?, audio_key=?, midi_key=?, error=?, updated_at=?, events_key=?, retry_count=? WHERE id=?""",
                 (
                     job.status.value, job.config.model_dump_json(),
                     job.progress.model_dump_json(), job.title, job.duration_s,
                     job.audio_key, job.midi_key, job.error,
-                    job.updated_at.isoformat(), job.events_key, job.id,
+                    job.updated_at.isoformat(), job.events_key, job.retry_count, job.id,
                 ),
             )
             await db.commit()

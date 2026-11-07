@@ -2,14 +2,22 @@ services:
   api:
     build: .
     ports:
-      - "8000:8000"
+      - "8000:8001"
     volumes:
       - data:/data
+      # Mount the full hub so snapshot symlinks into blobs remain valid.
+      - type: bind
+        source: ${MUSCRIPTOR_CACHE_DIR:-${HOME}/.cache/huggingface/hub}
+        target: /models/huggingface
+        read_only: true
     environment:
       DATA_DIR: /data
       WORKERS: 1
       DEFAULT_MODEL: medium
       MAX_DURATION_S: 600
+      MUSCRIPTOR_WEIGHTS_SMALL: ${MUSCRIPTOR_WEIGHTS_SMALL:-}
+      MUSCRIPTOR_WEIGHTS_MEDIUM: ${MUSCRIPTOR_WEIGHTS_MEDIUM:-}
+      MUSCRIPTOR_WEIGHTS_LARGE: ${MUSCRIPTOR_WEIGHTS_LARGE:-}
     init: true
     stop_grace_period: 30s
     healthcheck:

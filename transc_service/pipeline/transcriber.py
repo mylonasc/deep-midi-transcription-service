@@ -9,8 +9,10 @@ from pathlib import Path
 from ..models import TranscriptionOptions
 
 def _load(size: str):
+    from ..config import ServerConfig
+    weights = ServerConfig().weights_for(size)
     from muscriptor import TranscriptionModel
-    return TranscriptionModel.load_model(size)
+    return TranscriptionModel.load_model(weights)
 
 
 class TranscribeCancelled(Exception):

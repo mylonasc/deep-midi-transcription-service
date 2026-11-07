@@ -1,5 +1,8 @@
 import { test, expect } from '@playwright/test';
 import midiPackage from '@tonejs/midi';
+import { mockModelHealth } from './health-fixture';
+
+test.beforeEach(async ({ page }) => mockModelHealth(page));
 
 test('artifact retention and MIDI playback, pause, seeking and replay', async ({ page }) => {
   const failures: string[] = [];
@@ -7,7 +10,7 @@ test('artifact retention and MIDI playback, pause, seeking and replay', async ({
   const midi = new midiPackage.Midi();
   midi.addTrack().addNote({ midi: 60, time: 0, duration: 10 });
   const job = { id: 'done-song', title: 'Test song', youtube_url: 'https://youtu.be/example',
-    status: 'done', config: {}, progress: {}, audio_key: 'source.m4a', midi_key: 'out.mid', events_key: 'events.json' };
+    status: 'done', config: { transcription: { model: 'medium' } }, progress: {}, audio_key: 'source.m4a', midi_key: 'out.mid', events_key: 'events.json' };
   await page.route('**/api/jobs?*', route => route.fulfill({ json: [job,
     { ...job, id: 'cancelled-song', status: 'cancelled', midi_key: null }] }));
   await page.route('**/api/jobs/done-song/midi', route => route.fulfill({

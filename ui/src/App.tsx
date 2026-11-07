@@ -1,8 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import MidiPlayer from "./components/MidiPlayer";
+import JobCard, { ACTIVE } from "./components/JobCard";
+import ArtifactList from "./components/ArtifactList";
+import ModelHealth from "./components/ModelHealth";
 import { api, type Job } from "./lib/api";
 
-const ACTIVE = new Set(["queued", "downloading", "downloaded", "transcribing"]);
+const VisualizationWorkspace = lazy(() => import("./visualization/VisualizationWorkspace"));
 
 export default function App() {
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -11,16 +14,18 @@ export default function App() {
   const [maxDur, setMaxDur] = useState(600);
   const [allowMix, setAllowMix] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
-  const [err, setErr] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [busy, setBusy] = useState<Set<string>>(new Set());
+  const [filter, setFilter] = useState("all");
+  const [tab, setTab] = useState("jobs");
 
   const refresh = useCallback(async () => {
-    try {
-      setJobs(await api.list());
-      setErr(null);
-    } catch (e) {
-      setErr(String(e));
-    }
+    try { setJobs(await api.list()); setConnectionError(null); }
+    catch (reason) { setConnectionError(String(reason)); }
+    finally { setLoaded(true); }
   }, []);
 
   useEffect(() => {
@@ -34,127 +39,102 @@ export default function App() {
     return () => { disposed = true; clearTimeout(timer); };
   }, [refresh]);
 
-  const submit = async () => {
-    setErr(null);
+  async function submit() {
+    if (submitting) return;
+    setError(null);
     setSubmitting(true);
     try {
-      const job: Job = await api.create(url, model, maxDur, allowMix);
-      setUrl("");
-      setSelected(job.id);
+      const job: Job = await api.create(url.trim(), model, maxDur, allowMix);
+      setUrl(""); setSelected(job.id); setFilter("all");
       await refresh();
-    } catch (e) {
-      setErr(String(e));
-    } finally {
-      setSubmitting(false);
-    }
-  };
+    } catch (reason) { setError(String(reason)); }
+    finally { setSubmitting(false); }
+  }
 
-  const action = async (operation: () => Promise<unknown>) => {
+  async function action(id: string, operation: () => Promise<unknown>) {
+    setBusy(current => new Set(current).add(id));
+    setError(null);
     try { await operation(); await refresh(); }
-    catch (error) { setErr(String(error)); }
-  };
+    catch (reason) { setError(String(reason)); }
+    finally { setBusy(current => { const next = new Set(current); next.delete(id); return next; }); }
+  }
 
-  const queued = jobs.filter((j) => j.status === "queued" || j.status === "downloading");
-  const downloaded = jobs.filter((j) => j.audio_key);
-  const transcribed = jobs.filter((j) => j.midi_key);
-  const sel = jobs.find((j) => j.id === selected) ?? transcribed[0];
+  const active = jobs.filter(job => ACTIVE.has(job.status)).length;
+  const completed = jobs.filter(job => job.status === "done").length;
+  const failed = jobs.filter(job => job.status === "failed").length;
+  const visible = jobs.filter(job => filter === "all" || (filter === "active" ? ACTIVE.has(job.status) : job.status === filter));
+  const playerJob = jobs.find(job => job.id === selected) ?? jobs.find(job => job.midi_key);
 
-  return (
-    <div style={{ maxWidth: 900, margin: "0 auto", padding: 16, fontFamily: "sans-serif" }}>
-      <h1>Transcription Service</h1>
+  function preview(id: string) {
+    setSelected(id);
+    requestAnimationFrame(() => document.getElementById("player")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  }
 
-      <section style={{ border: "1px solid #ddd", padding: 12, borderRadius: 8 }}>
-        <h2>Queue a job</h2>
-        <input
-          placeholder="https://youtube.com/watch?v=…"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          style={{ width: "100%", padding: 8 }}
-        />
-        <div style={{ display: "flex", gap: 12, marginTop: 8, flexWrap: "wrap" }}>
-          <label>
-            Model{" "}
-            <select value={model} onChange={(e) => setModel(e.target.value)}>
-              <option value="small">small</option>
-              <option value="medium">medium</option>
-              <option value="large">large</option>
-            </select>
-          </label>
-          <label>
-            Max duration (s){" "}
-            <input
-              type="number"
-              min={1}
-              value={maxDur}
-              onChange={(e) => setMaxDur(Number(e.target.value))}
-              style={{ width: 90 }}
-            />
-          </label>
-          <label>
-            <input type="checkbox" checked={allowMix} onChange={(e) => setAllowMix(e.target.checked)} />{" "}
-            allow mixes
-          </label>
-          <button onClick={submit} disabled={submitting || !url.trim() || maxDur < 1}>
-            {submitting ? "Queuing…" : "Start / Queue"}
-          </button>
-        </div>
-        {err && <p style={{ color: "red" }}>{err}</p>}
-      </section>
+  return <>
+    <a className="skip-link" href="#main">Skip to content</a>
+    <header className="site-header"><div className="header-inner">
+      <div className="brand-mark" aria-hidden="true">♫</div>
+      <div><p className="eyebrow">DEEP MIDI</p><h1>Your music, transcribed.</h1><p className="header-copy">From YouTube to MIDI, in one queue.</p></div>
+      <span className={`connection ${connectionError ? "offline" : ""}`}><span aria-hidden="true">●</span> {connectionError ? "Reconnecting" : loaded ? "Connected" : "Connecting"}</span>
+    </div></header>
 
-      <section>
-        <h2>Jobs ({jobs.length}) — live</h2>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr>
-              <th align="left">id</th>
-              <th align="left">title/url</th>
-              <th align="left">status</th>
-              <th align="left">progress</th>
-              <th align="left">actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {jobs.map((j) => (
-              <tr key={j.id} style={{ borderTop: "1px solid #eee" }}>
-                <td><code>{j.id}</code></td>
-                <td>{j.title ?? j.youtube_url}</td>
-                <td>
-                  <span style={{ padding: "2px 8px", borderRadius: 12, background: j.status === "done" ? "#cfc" : j.status === "failed" ? "#fcc" : "#eee" }}>
-                    {j.status}
-                  </span>
-                  {j.error && <div style={{ color: "red", fontSize: 12 }}>{j.error}</div>}
-                </td>
-                <td style={{ fontSize: 12 }}>
-                  {j.progress.download_progress != null && <div>dl {(j.progress.download_progress * 100).toFixed(0)}%</div>}
-                  {j.progress.chunks_total != null && <div>chunks {j.progress.chunks_completed}/{j.progress.chunks_total}</div>}
-                </td>
-                <td style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                  {ACTIVE.has(j.status) && <button onClick={() => void action(() => api.cancel(j.id))}>Cancel</button>}
-                  <button onClick={() => { if (window.confirm("Delete this job and all its artifacts?")) void action(() => api.remove(j.id)); }}>Delete</button>
-                  {j.status === "done" && <button onClick={() => setSelected(j.id)}>Play</button>}
-                  {j.status === "done" && <a href={api.midiUrl(j.id)}>midi</a>}
-                  {j.audio_key && (
-                    <a href={api.audioUrl(j.id)}>audio</a>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
+    <main id="main" className="app-shell">
+      <div className="app-tabs" role="tablist" aria-label="Workspace" onKeyDown={event => {
+        if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
+          event.preventDefault();
+          const next = event.key === "Home" ? "jobs" : event.key === "End" ? "visualization" : tab === "jobs" ? "visualization" : "jobs";
+          setTab(next); document.getElementById(`tab-${next}`)?.focus();
+        }
+      }}>
+        <button id="tab-jobs" role="tab" aria-selected={tab === "jobs"} aria-controls="panel-jobs" tabIndex={tab === "jobs" ? 0 : -1} onClick={() => setTab("jobs")}>Jobs & artifacts</button>
+        <button id="tab-visualization" role="tab" aria-selected={tab === "visualization"} aria-controls="panel-visualization" tabIndex={tab === "visualization" ? 0 : -1} onClick={() => setTab("visualization")}>Visualization</button>
+      </div>
+      {tab === "jobs" ? <div id="panel-jobs" role="tabpanel" aria-labelledby="tab-jobs">
+      <div className="summary-grid" aria-label="Job summary">
+        <div><strong>{active}</strong><span>In progress</span></div>
+        <div><strong>{completed}</strong><span>Complete</span></div>
+        <div><strong>{failed}</strong><span>Need attention</span></div>
+      </div>
+      {connectionError && <div className="notice" role="alert">Could not refresh jobs. Retrying automatically. <span>{connectionError}</span></div>}
+      {error && <div className="notice" role="alert"><span>{error}</span><button onClick={() => setError(null)}>Dismiss</button></div>}
 
-      <section className="artifact-grid">
-        <div><h3>Queued ({queued.length})</h3><ul>{queued.map((j) => <li key={j.id}><code>{j.id}</code> {j.status}</li>)}</ul></div>
-        <div><h3>Downloaded artifacts ({downloaded.length})</h3><ul>{downloaded.map((j) => <li key={j.id}><code>{j.id}</code> <a href={api.audioUrl(j.id)}>audio</a></li>)}</ul></div>
-        <div><h3>Transcriptions ({transcribed.length})</h3><ul>{transcribed.map((j) => <li key={j.id}><code>{j.id}</code> <a href={api.midiUrl(j.id)}>midi</a> <button onClick={() => setSelected(j.id)}>play</button></li>)}</ul></div>
-      </section>
-
-      {sel && sel.status === "done" && (
-        <section style={{ marginTop: 16 }}>
-          <h2>Player</h2>
-          <MidiPlayer midiUrl={api.midiUrl(sel.id)} title={sel.title ?? sel.id} />
+      <div className="workspace">
+        <section className="panel queue-panel" aria-labelledby="queue-heading">
+          <p className="eyebrow">NEW TRANSCRIPTION</p><h2 id="queue-heading">Queue a song</h2>
+          <p className="section-copy">Paste a video link. We’ll download the audio and create your MIDI.</p>
+          <form onSubmit={event => { event.preventDefault(); void submit(); }}>
+            <label htmlFor="youtube-url">YouTube URL</label>
+            <input id="youtube-url" type="url" required placeholder="https://youtube.com/watch?v=…" value={url} onChange={event => setUrl(event.target.value)} />
+            <div className="form-grid">
+              <div><label htmlFor="model">Model</label><select id="model" value={model} onChange={event => setModel(event.target.value)}>
+                <option value="small">Small</option><option value="medium">Medium</option><option value="large">Large</option>
+              </select></div>
+              <div><label htmlFor="duration">Max duration (seconds)</label><input id="duration" type="number" min={1} required value={maxDur} onChange={event => setMaxDur(Number(event.target.value))} /></div>
+            </div>
+            <label className="checkbox-label"><input type="checkbox" checked={allowMix} onChange={event => setAllowMix(event.target.checked)} />Allow mixes</label>
+            <ModelHealth selectedModel={model} />
+            <button className="button-primary submit-button" type="submit" disabled={submitting || !url.trim() || !Number.isFinite(maxDur) || maxDur < 1}>{submitting ? "Queuing…" : "Queue transcription"}</button>
+            <p className="form-hint">One video per job. Larger models need more time and memory.</p>
+          </form>
         </section>
-      )}
-    </div>
-  );
+
+        <section className="jobs-section" aria-labelledby="jobs-heading">
+          <div className="section-heading"><div><p className="eyebrow">WORKSPACE</p><h2 id="jobs-heading">Jobs <span className="count">{jobs.length}</span></h2></div>
+            <div className="filter-control"><label htmlFor="status-filter">Show</label><select id="status-filter" value={filter} onChange={event => setFilter(event.target.value)}>
+              <option value="all">All jobs</option><option value="active">In progress</option><option value="done">Complete</option><option value="failed">Failed</option><option value="cancelled">Cancelled</option>
+            </select></div>
+          </div>
+          <p className="live-caption">Status refreshes every 2 seconds</p>
+          {!loaded ? <div className="empty-state" role="status">Loading jobs…</div>
+            : visible.length === 0 ? <div className="empty-state"><h3>{jobs.length ? "No matching jobs" : "Your queue is ready"}</h3><p>{jobs.length ? "Choose another status to see more jobs." : "Add a YouTube link to create your first transcription."}</p></div>
+            : <div className="job-list">{visible.map(job => <JobCard key={job.id} job={job} busy={busy.has(job.id)} onAction={(id, operation) => void action(id, operation)} onPlay={preview} />)}</div>}
+        </section>
+      </div>
+
+      {playerJob?.midi_key && <section id="player" className="player-section" aria-label="MIDI preview"><p className="eyebrow">LISTEN BACK</p><h2>MIDI preview</h2><MidiPlayer midiUrl={api.midiUrl(playerJob.id)} title={playerJob.title || playerJob.id} /></section>}
+      <ArtifactList jobs={jobs} onPlay={preview} />
+      </div> : <div id="panel-visualization" role="tabpanel" aria-labelledby="tab-visualization"><Suspense fallback={<p role="status">Loading visualization tools…</p>}><VisualizationWorkspace jobs={jobs} /></Suspense></div>}
+      <footer>Deep MIDI · Powered by muscriptor</footer>
+    </main>
+  </>;
 }

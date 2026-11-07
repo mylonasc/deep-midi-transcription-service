@@ -2,15 +2,33 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from pathlib import Path
 
 
 @dataclass(frozen=True)
 class ServerConfig:
-    data_dir: str = os.environ.get("DATA_DIR", "/data")
-    workers: int = int(os.environ.get("WORKERS", "1"))
-    default_model: str = os.environ.get("DEFAULT_MODEL", "medium")
-    default_max_duration_s: int = int(os.environ.get("MAX_DURATION_S", "600"))
+    data_dir: str = field(default_factory=lambda: os.environ.get("DATA_DIR", "/data"))
+    workers: int = field(default_factory=lambda: int(os.environ.get("WORKERS", "1")))
+    default_model: str = field(default_factory=lambda: os.environ.get("DEFAULT_MODEL", "medium"))
+    default_max_duration_s: int = field(default_factory=lambda: int(os.environ.get("MAX_DURATION_S", "600")))
+    weights_small: str = field(default_factory=lambda: os.environ.get("MUSCRIPTOR_WEIGHTS_SMALL", ""))
+    weights_medium: str = field(default_factory=lambda: os.environ.get("MUSCRIPTOR_WEIGHTS_MEDIUM", ""))
+    weights_large: str = field(default_factory=lambda: os.environ.get("MUSCRIPTOR_WEIGHTS_LARGE", ""))
+
+    def weights_for(self, size: str) -> str:
+        """Resolve server-owned weights without accepting arbitrary paths from jobs."""
+        if size not in {"small", "medium", "large"}:
+            raise ValueError(f"unsupported model size: {size}")
+        configured = getattr(self, f"weights_{size}")
+        if not configured:
+            return size  # muscriptor's normal HuggingFace download/cache resolution
+        path = Path(configured).expanduser()
+        if not path.is_file():
+            raise ValueError(f"Configured {size} weights not found: {path}")
+        if not path.with_name("config.json").is_file():
+            raise ValueError(f"Model config.json must be next to configured weights: {path}")
+        return str(path)
 
     @property
     def db_path(self) -> str:

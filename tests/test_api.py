@@ -27,6 +27,11 @@ class ApiTests(unittest.TestCase):
                 for url in ["http://youtu.be/x", "https://example.com", "https://youtube.com:bad/watch"]:
                     self.assertEqual(client.post("/jobs", json={"youtube_url": url}).status_code, 400)
                 self.assertEqual(client.get("/jobs?limit=-1").status_code, 422)
+                with patch('transc_service.model_health._cached_file', return_value=None):
+                    health = client.get('/health/models')
+                self.assertEqual(health.status_code, 200)
+                self.assertEqual(len(health.json()['models']), 3)
+                self.assertEqual(client.get('/healthz').json(), {'ok': True})
                 response = client.post("/jobs", json={"youtube_url": "https://youtu.be/x",
                     "config": {"yt_dlp": {"allow_mix": True}}})
                 self.assertEqual(response.status_code, 202)
@@ -36,5 +41,10 @@ class ApiTests(unittest.TestCase):
                 self.assertTrue(job["config"]["yt_dlp"]["allow_mix"])
                 self.assertEqual(client.get(f"/jobs/{job['id']}/events").status_code, 404)
                 self.assertEqual(client.post(f"/jobs/{job['id']}/cancel").json()["status"], "cancelled")
+                retried = client.post(f"/jobs/{job['id']}/retry")
+                self.assertEqual(retried.status_code, 202)
+                self.assertEqual(retried.json()['retry_count'], 1)
+                self.assertEqual(client.post(f"/jobs/{job['id']}/retry").status_code, 409)
+                self.assertEqual(client.post('/jobs/missing/retry').status_code, 404)
                 self.assertEqual(client.delete(f"/jobs/{job['id']}").status_code, 204)
                 self.assertEqual(client.get(f"/jobs/{job['id']}").status_code, 404)

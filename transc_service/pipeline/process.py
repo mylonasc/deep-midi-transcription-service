@@ -4,6 +4,7 @@ import json
 import os
 import signal
 import sys
+from collections import deque
 from pathlib import Path
 
 
@@ -12,9 +13,19 @@ async def run_stage(stage, payload, directory: Path, cancel, progress_cb=None):
     request.write_text(json.dumps(payload))
     process = await asyncio.create_subprocess_exec(
         sys.executable, "-m", "transc_service.pipeline.stage_worker", stage, str(request),
-        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
+        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
         start_new_session=True,
     )
+
+    diagnostics = deque(maxlen=12)
+
+    async def read_diagnostics():
+        # Progress bars can contain carriage returns without newlines. Drain in
+        # bounded chunks, concurrently, so verbose children cannot block on stderr.
+        while chunk := await process.stderr.read(4096):
+            diagnostics.append(chunk.decode(errors="replace"))
+
+    stderr_reader = asyncio.create_task(read_diagnostics())
 
     async def read():
         result = None
@@ -30,8 +41,10 @@ async def run_stage(stage, payload, directory: Path, cancel, progress_cb=None):
             else:
                 tail = (tail + [text])[-12:]
         code = await process.wait()
+        await stderr_reader
         if code or result is None:
-            raise RuntimeError("stage failed: " + "\n".join(tail))
+            reason = "\n".join(("".join(diagnostics) + "\n" + "\n".join(tail)).splitlines()[-12:])
+            raise RuntimeError(f"{stage} stage failed (exit {code}): " + reason)
         return result
 
     reader = asyncio.create_task(read())
@@ -54,4 +67,5 @@ async def run_stage(stage, payload, directory: Path, cancel, progress_cb=None):
                 await process.wait()
         cancelled.cancel()
         reader.cancel()
-        await asyncio.gather(cancelled, reader, return_exceptions=True)
+        stderr_reader.cancel()
+        await asyncio.gather(cancelled, reader, stderr_reader, return_exceptions=True)

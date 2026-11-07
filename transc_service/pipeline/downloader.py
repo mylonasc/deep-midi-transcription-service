@@ -80,7 +80,7 @@ async def _download_audio(job: Job, dest: Path, cancel: asyncio.Event,
 
     def run() -> dict:
         opts = {
-            "quiet": True, "no_warnings": True,
+            "quiet": True, "no_warnings": True, "noprogress": True,
             "socket_timeout": 20,
             "js_runtimes": {"node": {}},
             "format": policy.format,

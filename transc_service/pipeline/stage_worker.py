@@ -2,11 +2,13 @@
 import asyncio
 import json
 import sys
+from contextlib import redirect_stdout
 from pathlib import Path
 
 
 def emit(kind, value):
-    print("SERVICE_EVENT:" + json.dumps({"type": kind, "value": value}), flush=True)
+    print("SERVICE_EVENT:" + json.dumps({"type": kind, "value": value}),
+          file=sys.__stdout__, flush=True)
 
 
 async def main():
@@ -38,4 +40,7 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    # Reserve stdout exclusively for the protocol, including during imports.
+    # Third-party print() calls and progress displays belong in stderr.
+    with redirect_stdout(sys.stderr):
+        asyncio.run(main())

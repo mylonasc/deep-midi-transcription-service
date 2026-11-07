@@ -16,6 +16,23 @@ Non-goals: authentication, multi-tenancy, billing, front-end, horizontal scaling
 
 ### Implementation review amendments
 
+Visualization prototype: a lazy-loaded UI workspace tab renders per-track alphaTab
+notation and standard guitar/bass fret suggestions from MIDI artifacts. A separate
+piano roll consumes original MIDI timings across all instruments (including drums).
+MIDI parsing, replaceable fretting and renderer adapters are isolated under
+`ui/src/visualization/`. Initial notation is sixteenth-quantized 4/4 with four-bar
+pagination; not production engraving, optimal fingering or synchronized playback.
+
+Subsequent additions: manual retry via `POST /jobs/{id}/retry` for failed/cancelled
+jobs (same ID/config, persisted retry count, reuse audio, reject active/done with
+409); attempt-tagged queue entries prevent duplicate stale work. The dashboard
+now uses mobile-first cards, filtering, expanded diagnostics and touch-sized
+controls, with Playwright overflow checks at mobile/tablet/desktop widths.
+App-level `MUSCRIPTOR_WEIGHTS_SMALL/MEDIUM/LARGE` optionally map job model sizes
+to local safetensors plus sibling config.json. Compose mounts a configurable host
+HuggingFace hub read-only; `.env.example` documents configuration. These supersede
+the earlier default-only weights and UI sketches.
+
 The React UI is now a separate nginx container, with `/api` proxied to FastAPI.
 The stack starts using `docker compose up --build`. See `README.md` for current
 operational behavior and limitations. These corrections supersede the original

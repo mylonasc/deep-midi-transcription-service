@@ -33,6 +33,58 @@ the service reports those failures but does not bypass them.
 
 ## Behavior and limitations
 
+### Local model weights
+
+Job-level model selection (`small`, `medium`, `large`) can resolve to local weights
+configured by the server:
+
+```sh
+cp .env.example .env
+# Edit .env:
+# MUSCRIPTOR_CACHE_DIR=/home/your-user/.cache/huggingface/hub
+# MUSCRIPTOR_WEIGHTS_MEDIUM=/models/huggingface/models--MuScriptor--muscriptor-medium/snapshots/REVISION/model.safetensors
+```
+
+Compose mounts the host hub read-only at `/models/huggingface`. Mount the entire
+hub so relative snapshot-to-blob symlinks work. Each configured checkpoint must
+have a sibling `config.json`. Set `MUSCRIPTOR_WEIGHTS_SMALL` / `_LARGE` similarly,
+or leave any size unset to use muscriptor's default HuggingFace cache/download.
+An invalid configured path fails explicitly rather than silently downloading.
+For native development, export these variables with **host** paths; `.env` is
+read by Compose, not automatically by the Python app. Weight paths are app-level
+settings, not arbitrary client-supplied job paths. Never commit `.env` or weights.
+
+### Pipeline and UI
+
+- **Visualization tab (prototype):** select a completed MIDI song and view each
+  instrument with alphaTab, or switch to an independent all-instrument piano roll.
+  Guitar/bass programs get standard-tuning tablature automatically; other pitched
+  tracks get standard notation. Format can be overridden. Notation uses four
+  4/4 measures per page with sixteenth-note quantization. Frets are heuristic,
+  not recovered original fingering or guaranteed playable chords. Out-of-range
+  or conflicting notes are reported and remain visible in the original-timing
+  piano roll, along with drums. Notation does not yet handle changing meter/tempo,
+  percussion scoring or synchronized playback. The alphaTab renderer, MIDI parser,
+  and replaceable fret solver live separately in `ui/src/visualization/`.
+  [Tayuya](https://github.com/vipul-sharma20/tayuya) was considered but is not used
+  in this iteration because it documents solo-only support.
+
+- **Model availability:** the queue form shows per-size file status and refreshes
+  every 15 seconds (or manually). `/health/models` checks local/configured files
+  and the default HuggingFace cache without downloading or loading models.
+  Available means readable, nonempty weights and valid architecture config—not
+  a tested inference run. Uncached sizes show "Needs download"; broken configured
+  files show "Unavailable". `/healthz` remains independent process liveness.
+
+- **Retry:** `POST /jobs/{id}/retry` (or the Retry button) requeues a failed or
+  cancelled job using its original options. It preserves the job ID, increments
+  `retry_count`, clears the last error/progress, and reuses completed audio.
+  Active or completed jobs return 409; missing jobs return 404. Retries are manual,
+  not an automatic infinite loop.
+- The mobile-first dashboard uses wrapping cards, status filters, expandable
+  diagnostics, and responsive artifact lists. Long URLs/titles/errors stay inside
+  the viewport; action controls have 44px minimum touch targets.
+
 - Jobs run automatically after queuing. SQLite is the durable queue source;
   unfinished jobs recover on restart, reusing completed audio downloads.
 - A stage runs in a subprocess, making probing, downloading, FFmpeg conversion,

@@ -4,12 +4,14 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from urllib.parse import urlparse
 import mimetypes
+import asyncio
 
 from fastapi import FastAPI, HTTPException, Response, Query
 from pydantic import BaseModel
 
 from .config import ServerConfig
 from .models import JobConfig, JobStatus
+from .model_health import model_availability
 from .pipeline.manager import JobManager
 from .stores.local import LocalObjectStore
 from .stores.sqlite import SqliteMetadataStore
@@ -38,6 +40,11 @@ class CreateJobBody(BaseModel):
 @app.get("/healthz")
 async def healthz():
     return {"ok": True}
+
+
+@app.get("/health/models")
+async def model_health():
+    return await asyncio.to_thread(model_availability, cfg)
 
 
 @app.post("/jobs", status_code=202)
@@ -90,6 +97,17 @@ async def delete_job(job_id: str):
     if not ok:
         raise HTTPException(404, "job not found")
     return Response(status_code=204)
+
+
+@app.post("/jobs/{job_id}/retry", status_code=202)
+async def retry_job(job_id: str):
+    try:
+        job = await manager.retry(job_id)
+    except ValueError as exc:
+        raise HTTPException(409, str(exc))
+    if job is None:
+        raise HTTPException(404, "job not found")
+    return job
 
 
 async def _artifact_bytes(key: str | None, not_ready_msg: str) -> bytes:
