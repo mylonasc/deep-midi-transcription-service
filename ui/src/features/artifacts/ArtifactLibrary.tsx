@@ -1,6 +1,6 @@
-import { api, type Job } from "../lib/api";
+import { api, type Job } from "../../lib/api";
 
-export default function ArtifactList({ jobs, onPlay }: { jobs: Job[]; onPlay: (id: string) => void }) {
+export default function ArtifactLibrary({ jobs, onPlay }: { jobs: Job[]; onPlay: (id: string) => void }) {
   const groups = [
     { title: "Queued", jobs: jobs.filter(job => job.status === "queued" || job.status === "downloading"), kind: "queued" },
     { title: "Downloaded artifacts", jobs: jobs.filter(job => job.audio_key), kind: "audio" },
