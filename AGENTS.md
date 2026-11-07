@@ -163,20 +163,31 @@ no backend transcription or storage changes are needed. Keep these layers separa
 - `alphaTex.ts`: notation adapter, quantization, excerpt pagination and alphaTex
   generation; accepts an injected fret resolver. Titles must be escaped so MIDI
   metadata cannot become alphaTex commands.
-- `AlphaTabView.tsx`: alphaTab rendering/lifecycle only. Renderer and fret solver
+- `AlphaTabView.tsx`: alphaTab rendering/lifecycle only, plus a proportional
+  page-cursor overlay driven by the shared playback position. Renderer and fret solver
   must remain independently replaceable. Bravura font and its OFL license are
   bundled locally through Vite; no external font/soundfont download is needed.
 - `PianoRoll.tsx`: independent original-timing piano roll. Defaults to all tracks,
   includes drums and notes omitted from fretting, and has its own filter/time
-  window. Do not derive it from quantized notation or fret-assignment results.
+  window. Shows a live playhead, highlights sounding notes, follows playback when
+  enabled, and click-to-seek calls back into the shared engine. Do not derive it from quantized notation or fret-assignment results.
+- `playback.ts` + `useMidiPlayback.ts`: renderer-neutral page/measure time helpers
+  and one shared Tone.js preview engine (short-lookahead scheduling, user-gesture
+  start, sustained-note restoration, disposal on song change). Both views consume the
+  same position/seek API so roll and tabs stay synchronized.
 - `VisualizationWorkspace.tsx`: song/track/view selection, cancellable MIDI
-  loading, and composition of these independent components.
+  loading, shared transport (play/pause/restart/slider), notation auto-paging and
+  measure/page seeking, and composition of these independent components.
 
 Prototype limitations: notation assumes 4/4 and quantizes to sixteenths, four
 measures per page; meter/tempo changes, expressive effects and percussion notation
 are not represented. Ties preserve quantized sustained durations within an
 excerpt; each excerpt starts afresh. Piano roll keeps the original timing.
-Notation is not synchronized with audio playback. Wide notation/roll content may
+A shared Tone.js preview plays both views in sync: the roll shows a playhead with
+optional follow and click-to-seek, while notation auto-pages, shows proportional
+page position, and seeks by page/measure/transport. That page cursor is
+proportional, not note-accurate, and page boundaries use average ticks-to-seconds
+mapping under tempo changes. Wide notation/roll content may
 scroll within their own containers, never force horizontal page overflow.
 Playwright tests exercise real alphaTab SVG rendering on mobile/desktop, alphaTex
 parsing, fret assignment invariants, and independent all-instrument piano-roll data.

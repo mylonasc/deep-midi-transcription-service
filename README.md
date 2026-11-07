@@ -64,7 +64,10 @@ settings, not arbitrary client-supplied job paths. Never commit `.env` or weight
   not recovered original fingering or guaranteed playable chords. Out-of-range
   or conflicting notes are reported and remain visible in the original-timing
   piano roll, along with drums. Notation does not yet handle changing meter/tempo,
-  percussion scoring or synchronized playback. The alphaTab renderer, MIDI parser,
+  percussion scoring; synchronized preview playback is supported through one shared
+  Tone.js engine: the piano roll shows a live playhead with follow and click-to-seek,
+  while notation auto-pages, shows proportional page position, and seeks by
+  page/measure/transport. The alphaTab renderer, MIDI parser,
   and replaceable fret solver live separately in `ui/src/visualization/`.
   [Tayuya](https://github.com/vipul-sharma20/tayuya) was considered but is not used
   in this iteration because it documents solo-only support.

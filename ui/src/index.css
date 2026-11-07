@@ -121,7 +121,13 @@ progress::-webkit-progress-value { background: var(--accent); border-radius: 10p
 .player input[type=range] { display: block; min-height: 44px; accent-color: var(--accent); margin: 0; }
 .player small { display: block; color: var(--muted); font-size: .75rem; line-height: 1.5; }
 footer { color: var(--muted); font-size: .75rem; text-align: center; padding: 32px 0 12px; }
-.app-tabs, .view-switch, .page-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 20px; }
+.app-tabs, .view-switch, .page-controls, .measure-seek, .transport-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 20px; }
+.transport { margin-top: 20px; }
+.transport-controls { margin-bottom: 8px; }
+.transport-controls span { font-size: .8rem; color: var(--muted); }
+.transport input[type=range] { display: block; }
+.measure-seek { margin: -8px 0 16px; }
+.measure-seek button { min-height: 44px; font-size: .78rem; }
 .app-tabs [aria-selected=true], .view-switch [aria-pressed=true] { color: white; background: var(--accent); border-color: var(--accent); }
 .visualization-workspace { padding: 20px 14px; min-width: 0; }
 .visual-controls { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; margin: 20px 0; }
@@ -130,7 +136,8 @@ footer { color: var(--muted); font-size: .75rem; text-align: center; padding: 32
 .prototype-note { color: var(--muted); font-size: .8rem; line-height: 1.6; margin: 16px 0; }
 .page-controls span { font-size: .8rem; color: var(--muted); }
 .notation-scroll, .piano-roll-scroll { max-width: 100%; overflow: auto; border: 1px solid var(--border); border-radius: 10px; background: white; margin: 16px 0; }
-.notation-scroll > div { min-width: 640px; }
+.notation-scroll > .notation-frame { position: relative; min-width: 640px; }
+.notation-cursor { position: absolute; top: 0; bottom: 0; width: 3px; background: #c02848; border-radius: 2px; pointer-events: none; z-index: 2; }
 .piano-roll-scroll { max-height: 560px; }
 .piano-roll-scroll svg { display: block; max-width: none; }
 .roll-legend { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; font-size: .8rem; }

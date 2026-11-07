@@ -3,6 +3,7 @@ import midiPackage from '@tonejs/midi';
 import * as alphaTab from '@coderline/alphatab';
 import { greedyFretResolver, GUITAR_TUNING } from '../src/visualization/fretting';
 import { buildAlphaTex } from '../src/visualization/alphaTex';
+import { barStartSeconds, pageStartSeconds, timeToPage } from '../src/visualization/playback';
 import type { MidiSong, SongNote } from '../src/visualization/types';
 import { mockModelHealth } from './health-fixture';
 
@@ -40,8 +41,7 @@ test('alphaTab adapter produces valid scores independently of fret assignment', 
   }
 });
 
-for (const width of [375, 1280]) {
-  test(`visualization renders alphaTab and independent piano roll at ${width}px`, async ({ page }) => {
+for (const width of [375, 1280]) {  test(`visualization renders alphaTab and independent piano roll at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     await mockModelHealth(page);
     const errors: string[] = [];
@@ -80,3 +80,50 @@ for (const width of [375, 1280]) {
     expect(errors).toEqual([]);
   });
 }
+
+test('playback helpers map pages and measures to seconds', () => {
+  const song: MidiSong = { ppq: 480, tempo: 120, duration: 16, durationTicks: 480 * 32, tracks: [] };
+  expect(pageStartSeconds(song, 0)).toBeCloseTo(0, 5);
+  expect(pageStartSeconds(song, 1)).toBeCloseTo(8, 5);
+  expect(timeToPage(song, 0)).toBe(0);
+  expect(timeToPage(song, 9)).toBe(1);
+  expect(barStartSeconds(song, 1, 2)).toBeCloseTo(12, 5);
+});
+
+test('visualization transport seeks tabs and piano roll in sync', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await mockModelHealth(page);
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  const midi = new midiPackage.Midi();
+  const guitar = midi.addTrack();
+  guitar.name = 'Lead guitar'; guitar.instrument.number = 24;
+  guitar.addNote({ midi: 60, time: 0, duration: 0.5 });
+  guitar.addNote({ midi: 64, time: 9, duration: 0.5 });
+  await page.route('**/api/jobs?*', route => route.fulfill({ json: [{ id: 'sync-song', title: 'Sync song',
+    status: 'done', config: { transcription: { model: 'medium' } }, progress: {}, midi_key: 'out.mid' }] }));
+  await page.route('**/api/jobs/sync-song/midi', route => route.fulfill({ contentType: 'audio/midi', body: Buffer.from(midi.toArray()) }));
+  await page.goto('/');
+  await page.getByRole('tab', { name: 'Visualization', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'MIDI visualization' })).toBeVisible();
+  await expect.poll(() => page.getByTestId('alphatab-score').locator('svg').count()).toBeGreaterThan(0);
+  const transport = page.getByLabel('Visualization playback position');
+  await expect(transport).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Measure 2', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Measure 2', exact: true }).click();
+  await expect(transport).not.toHaveValue('0');
+  await page.getByRole('button', { name: 'Next measures' }).click();
+  await expect(page.getByText('Page 2 of', { exact: false })).toBeVisible();
+  await expect.poll(async () => Number(await transport.inputValue())).toBeGreaterThan(7);
+  await page.getByRole('button', { name: 'Piano roll', exact: true }).click();
+  await expect(page.getByTestId('roll-playhead')).toHaveCount(1);
+  await transport.fill('1');
+  await expect(page.getByTestId('roll-playhead')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Play', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Pause', exact: true })).toBeVisible();
+  await expect.poll(async () => Number(await transport.inputValue())).toBeGreaterThan(1.1);
+  await expect(page.getByTestId('roll-playhead')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Pause', exact: true }).click();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  expect(errors).toEqual([]);
+});
