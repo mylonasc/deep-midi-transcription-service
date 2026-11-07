@@ -1,0 +1,41 @@
+"""Private subprocess entry point. Stdout carries prefixed JSON progress/results."""
+import asyncio
+import json
+import sys
+from pathlib import Path
+
+
+def emit(kind, value):
+    print("SERVICE_EVENT:" + json.dumps({"type": kind, "value": value}), flush=True)
+
+
+async def main():
+    stage, request = sys.argv[1:]
+    payload = json.loads(Path(request).read_text())
+    cancel = asyncio.Event()
+    if stage == "download":
+        from .downloader import _download_audio
+        from ..models import Job
+        path, info = await _download_audio(
+            Job.model_validate(payload["job"]), Path(payload["dest"]), cancel,
+            lambda fraction: emit("progress", [fraction]),
+        )
+        emit("result", {"path": str(path), "info": {
+            "title": info.get("title"), "duration": info.get("duration"),
+        }})
+    else:
+        from .transcriber import _transcribe_audio, events_to_jsonable
+        from ..models import TranscriptionOptions
+        midi, events = await _transcribe_audio(
+            payload["audio"], TranscriptionOptions.model_validate(payload["options"]),
+            cancel, lambda done, total: emit("progress", [done, total]),
+        )
+        directory = Path(request).parent
+        (directory / "out.mid").write_bytes(midi)
+        (directory / "events.json").write_text(json.dumps(events_to_jsonable(events)))
+        emit("result", {"midi": str(directory / "out.mid"),
+                        "events": str(directory / "events.json")})
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

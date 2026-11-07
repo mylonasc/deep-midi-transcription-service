@@ -1,0 +1,33 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - data:/data
+    environment:
+      DATA_DIR: /data
+      WORKERS: 1
+      DEFAULT_MODEL: medium
+      MAX_DURATION_S: 600
+    init: true
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+
+  ui:
+    build:
+      context: ./ui
+      args:
+        VITE_API_URL: /api
+    ports:
+      - "3000:80"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  data:

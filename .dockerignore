@@ -1,0 +1,7 @@
+.venv
+ui
+__pycache__
+**/__pycache__
+*.mp3
+*.mid
+data
