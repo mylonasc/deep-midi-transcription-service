@@ -57,8 +57,8 @@ export default function App() {
       </div>
 
       {playerJob?.midi_key && <section id="player" className="player-section" aria-label="MIDI preview"><p className="eyebrow">LISTEN BACK</p><h2>MIDI preview</h2><MidiPlayer midiUrl={api.midiUrl(playerJob.id)} title={playerJob.title || playerJob.id} /></section>}
-      <ArtifactLibrary jobs={jobs} onPlay={preview} />
-      </div> : <div id="panel-visualization" role="tabpanel" aria-labelledby="tab-visualization" tabIndex={-1}><Suspense fallback={<p role="status">Loading visualization tools…</p>}><VisualizationWorkspace jobs={jobs} /></Suspense></div>}
+       <ArtifactLibrary jobs={jobs} onPlay={preview} onTablature={id => { setSelected(id); selectTab("visualization"); }} />
+       </div> : <div id="panel-visualization" role="tabpanel" aria-labelledby="tab-visualization" tabIndex={-1}><Suspense fallback={<p role="status">Loading visualization tools…</p>}><VisualizationWorkspace jobs={jobs} initialJobId={selected ?? undefined} /></Suspense></div>}
       <footer>Deep MIDI · Powered by muscriptor</footer>
     </main>
   </>;

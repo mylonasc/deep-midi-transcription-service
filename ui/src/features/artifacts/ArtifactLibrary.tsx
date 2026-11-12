@@ -1,6 +1,6 @@
 import { api, type Job } from "../../lib/api";
 
-export default function ArtifactLibrary({ jobs, onPlay }: { jobs: Job[]; onPlay: (id: string) => void }) {
+export default function ArtifactLibrary({ jobs, onPlay, onTablature }: { jobs: Job[]; onPlay: (id: string) => void; onTablature?: (id: string) => void }) {
   const groups = [
     { title: "Queued", jobs: jobs.filter(job => job.status === "queued" || job.status === "downloading"), kind: "queued" },
     { title: "Downloaded artifacts", jobs: jobs.filter(job => job.audio_key), kind: "audio" },
@@ -15,7 +15,8 @@ export default function ArtifactLibrary({ jobs, onPlay }: { jobs: Job[]; onPlay:
           <div className="artifact-actions">
             {group.kind === "queued" ? <span className="stage-hint">{job.status}</span>
               : <a className="button-link" href={group.kind === "audio" ? api.audioUrl(job.id) : api.midiUrl(job.id)}>{group.kind === "audio" ? "Open audio" : "Download MIDI"}</a>}
-            {group.kind === "midi" && <button onClick={() => onPlay(job.id)}>Preview</button>}
+             {group.kind === "midi" && <button onClick={() => onPlay(job.id)}>Preview</button>}
+             {group.kind === "midi" && onTablature && <button onClick={() => onTablature(job.id)}>Tablature</button>}
           </div>
         </li>)}</ul>}
     </div>)}

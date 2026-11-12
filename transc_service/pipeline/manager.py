@@ -26,6 +26,9 @@ class JobManager:
         self._tasks = []
         self._stopping = False
         self._retry_lock = asyncio.Lock()
+        self.compute = asyncio.Semaphore(workers)
+        self.on_midi = None
+        self.before_delete = None
 
     async def start(self):
         self._stopping = False
@@ -95,6 +98,8 @@ class JobManager:
         return job
 
     async def delete(self, job_id):
+        if self.before_delete:
+            await self.before_delete(job_id)
         if await self.cancel(job_id) is None:
             return False
         # The producer is now stopped, so it cannot resurrect artifacts after deletion.
@@ -170,7 +175,9 @@ class JobManager:
                 def chunk_progress(done, total):
                     job.progress.chunks_completed, job.progress.chunks_total = done, total
 
-                midi, events = await transcribe_audio(source, job.config.transcription, cancel, chunk_progress)
+                from .process import compute_slot
+                async with compute_slot(self.compute, cancel):
+                    midi, events = await transcribe_audio(source, job.config.transcription, cancel, chunk_progress)
                 if cancel.is_set():
                     raise asyncio.CancelledError
                 job.midi_key = f"jobs/{job.id}/out.mid"
@@ -178,6 +185,14 @@ class JobManager:
                 await self._objects.put_bytes(job.midi_key, midi)
                 await self._objects.put_bytes(job.events_key, json.dumps(events).encode())
                 job.status, job.error = JobStatus.DONE, None
+                if job.config.tablature == "auto" and self.on_midi:
+                    # Publish the MIDI metadata first; child tasks inspect the stored artifact.
+                    await self._meta.update(job)
+                    try:
+                        job.auto_tablature_message = await self.on_midi(job)
+                    except Exception as exc:
+                        log.exception("Automatic tablature submission failed for %s", job.id)
+                        job.auto_tablature_message = f"Automatic tablature unavailable: {type(exc).__name__}"
         except asyncio.CancelledError:
             job.status, job.error = JobStatus.CANCELLED, "cancelled"
         except Exception as exc:

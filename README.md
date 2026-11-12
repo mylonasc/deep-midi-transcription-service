@@ -19,7 +19,11 @@ be slow and memory intensive, especially for `large`.
 For local development:
 
 ```sh
-uv pip install -r requirements.txt
+uv venv
+uv pip install torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cpu
+uv pip install -r requirements.txt -r requirements-tablature.txt
+.venv/bin/python tools/install_open_fret.py "$(.venv/bin/python -c 'import site; print(site.getsitepackages()[0])')"
+npm ci --prefix tools/notation
 DATA_DIR=./data .venv/bin/uvicorn transc_service.app:app
 # Another terminal:
 cd ui
@@ -55,6 +59,34 @@ read by Compose, not automatically by the Python app. Weight paths are app-level
 settings, not arbitrary client-supplied job paths. Never commit `.env` or weights.
 
 ### Pipeline and UI
+
+- **Open-Fret guitar tablature:** in **Visualization → Generated tablature**, select
+  a MIDI part and generate persistent model-assisted fingerings. This is separate
+  from the heuristic prototype below. Preview uses the existing MIDI transport;
+  download JSON, AlphaTex, ASCII onset preview and diagnostics. Tasks have their
+  own progress, cancellation, retries and deletion. Tab failure never invalidates
+  MIDI. Existing MIDI jobs are supported. The queue form can opt into automatic
+  tabs when exactly one eligible guitar part exists; ambiguous cases require
+  manual selection. See [implementation slices and contracts](EPIC_TABLATURE.md).
+
+  **Operator setup:** weights are not bundled and downloads default to disabled.
+  After reviewing upstream's unresolved training-data/model redistribution rights,
+  set `OPEN_FRET_ALLOW_DOWNLOAD=true` in Compose's `.env` to download the pinned
+  model on first use. Alternatively set `OPEN_FRET_MODEL_DIR` to a container-visible
+  local snapshot with a `MODEL_REVISION` text file containing the configured HF
+  commit. `.env.example` documents paths, revision, timeout and note limits.
+  Native development must export these variables instead. Model health is at
+  `/health/tablature`; a failed check never affects MIDI-only work or `/healthz`.
+
+  Initial scope: one selected part, six strings in E standard, capo 0, frets 0–24.
+  No transposition, dropped notes or full-band arrangement. Sustain pedal, pitch
+  bends, malformed notes and out-of-range pitches fail explicitly. Tempo changes
+  (including within measures), independent sustains and meter changes at bar
+  boundaries are preserved; mid-measure meter changes and unrepresentable rhythms
+  fail rather than silently quantize. Every production export is independently
+  imported by alphaTab and checked for complete pitches/attacks/releases and
+  tempo/meter. 480-PPQ tick rounding is reported; original ticks/seconds remain in
+  canonical JSON. Feasible fingering is not a biomechanical playability guarantee.
 
 - **Visualization tab (prototype):** select a completed MIDI song and view each
   instrument with alphaTab, or switch to an independent all-instrument piano roll.
@@ -113,7 +145,8 @@ settings, not arbitrary client-supplied job paths. Never commit `.env` or weight
   rollout strategy; multiple replicas require a shared queue/claim mechanism and
   suitable metadata/object store backends first.
 
-Per-job configuration is versioned and split into `yt_dlp`, `transcription` and
+Per-job configuration is versioned and split into `yt_dlp`, `transcription`,
+optional `tablature: "off" | "auto"` (default `"off"`), and
 `extensions`. Unknown standard fields are rejected; `extensions` is reserved for
 future plugins. Server defaults merge with explicitly supplied job fields.
 See `/docs` for supported options (including `prelude_forcing=false` when batching).
@@ -129,3 +162,19 @@ npm test
 ```
 
 The backend tests use fake stages: they do not contact YouTube or download models.
+The optional pinned-model integration checks are separate:
+
+```sh
+# Requires the inference runtime and tools/notation dependencies installed above.
+# Use a NEW output directory. Downloads require explicit operator opt-in.
+OPEN_FRET_ALLOW_DOWNLOAD=true OMP_NUM_THREADS=2 .venv/bin/python tools/smoke_tablature.py /tmp/new-tab-smoke
+node tools/verify_tablature.cjs /tmp/new-tab-smoke
+# Exercise muscriptor's real MIDI serializer (no audio inference):
+OPEN_FRET_ALLOW_DOWNLOAD=true OMP_NUM_THREADS=2 .venv/bin/python tools/smoke_tablature.py /tmp/new-muscriptor-smoke --muscriptor
+# Full API/store/subprocess/download/deletion path, temporary SQLite and artifacts:
+OPEN_FRET_ALLOW_DOWNLOAD=true OMP_NUM_THREADS=2 .venv/bin/python tools/smoke_tablature_api.py
+```
+
+These fixtures test pipeline correctness, not held-out model quality or live
+YouTube/audio transcription. See `THIRD_PARTY_NOTICES.md` for inference/duration
+code attribution and the distinct model/data rights caveat.

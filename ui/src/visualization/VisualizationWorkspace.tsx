@@ -7,8 +7,9 @@ import AlphaTabView from "./AlphaTabView";
 import PageNavigator from "./PageNavigator";
 import PianoRoll from "./PianoRoll";
 import Transport from "./Transport";
+import TablaturePanel from "./TablaturePanel";
 
-function SongViews({ song }: { song: MidiSong }) {
+function SongViews({ song, jobId, sourceHash }: { song: MidiSong; jobId: string; sourceHash: string | null }) {
   const state = useVisualizationState(song);
   const { view, setView, trackId, selectTrack, mode, setMode, page } = state;
   const { track, notation, cursorFraction, playback, follow, setFollow, goToPage, seekMeasure } = state;
@@ -20,8 +21,10 @@ function SongViews({ song }: { song: MidiSong }) {
     <div className="view-switch" role="group" aria-label="Visualization view">
       <button aria-pressed={view === "notation"} onClick={() => setView("notation")}>Instrument notation</button>
       <button aria-pressed={view === "roll"} onClick={() => setView("roll")}>Piano roll</button>
+      <button aria-pressed={view === "generated"} onClick={() => setView("generated")}>Generated tablature</button>
     </div>
-    {view === "roll" ? <PianoRoll song={song} currentTime={playback.current} playing={playback.playing} onSeek={playback.seek} /> : <>
+    {view === "roll" ? <PianoRoll song={song} currentTime={playback.current} playing={playback.playing} onSeek={playback.seek} />
+      : view === "generated" ? <TablaturePanel jobId={jobId} sourceHash={sourceHash} current={playback.current} playing={playback.playing} follow={follow} onSeek={playback.seek} /> : <>
       <div className="visual-controls">
         <div><label htmlFor="notation-track">Instrument track</label><select id="notation-track" value={trackId} onChange={event => selectTrack(event.target.value)}>
           {song.tracks.map(item => <option key={item.id} value={item.id}>{item.name} · {item.instrument}{item.percussion ? " (drums)" : ""}</option>)}
@@ -44,6 +47,7 @@ function SongViews({ song }: { song: MidiSong }) {
 function MidiVisualization({ jobId }: { jobId: string }) {
   const [song, setSong] = useState<MidiSong | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [sourceHash, setSourceHash] = useState<string | null>(null);
   useEffect(() => {
     const abort = new AbortController();
     void (async () => {
@@ -51,7 +55,10 @@ function MidiVisualization({ jobId }: { jobId: string }) {
         const response = await fetch(api.midiUrl(jobId), { signal: abort.signal });
         if (!response.ok) throw new Error(`Could not load MIDI (${response.status})`);
         const parsed = parseMidi(await response.arrayBuffer());
-        if (!abort.signal.aborted) setSong(parsed);
+        if (!abort.signal.aborted) {
+          setSourceHash(response.headers.get("ETag")?.replaceAll('"', '') ?? null);
+          setSong(parsed);
+        }
       } catch (reason) { if (!abort.signal.aborted) setError(String(reason)); }
     })();
     return () => abort.abort();
@@ -59,12 +66,12 @@ function MidiVisualization({ jobId }: { jobId: string }) {
   if (error) return <p role="alert" className="notice">{error}</p>;
   if (!song) return <div aria-busy="true"><div className="skeleton skeleton-line" aria-hidden="true" /><div className="skeleton skeleton-block" aria-hidden="true" /><p role="status">Loading MIDI visualization…</p></div>;
   if (!song.tracks.length) return <p className="empty-state">This MIDI contains no notes to visualize.</p>;
-  return <SongViews key={song.duration} song={song} />;
+  return <SongViews key={song.duration} song={song} jobId={jobId} sourceHash={sourceHash} />;
 }
 
-export default function VisualizationWorkspace({ jobs }: { jobs: Job[] }) {
+export default function VisualizationWorkspace({ jobs, initialJobId }: { jobs: Job[]; initialJobId?: string }) {
   const available = jobs.filter(job => job.midi_key);
-  const [selected, setSelected] = useState("");
+  const [selected, setSelected] = useState(initialJobId ?? "");
   const selectedJob = available.find(job => job.id === selected) ?? available[0];
   return <section className="panel visualization-workspace" aria-labelledby="visual-heading">
     <p className="eyebrow">EXPLORE YOUR TRANSCRIPTION</p><h2 id="visual-heading">MIDI visualization</h2>
@@ -72,7 +79,8 @@ export default function VisualizationWorkspace({ jobs }: { jobs: Job[] }) {
     {!selectedJob ? <p className="empty-state">Complete a transcription first. Your MIDI songs will appear here.</p> : <>
       <label htmlFor="visual-song">MIDI song</label><select id="visual-song" value={selectedJob.id} onChange={event => setSelected(event.target.value)}>
         {available.map(job => <option key={job.id} value={job.id}>{job.title || job.id}</option>)}
-      </select>
+       </select>
+       {selectedJob.auto_tablature_message && <p role="status" className="form-hint">{selectedJob.auto_tablature_message}</p>}
       <MidiVisualization key={selectedJob.id} jobId={selectedJob.id} />
     </>}
   </section>;

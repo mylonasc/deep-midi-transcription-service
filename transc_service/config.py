@@ -15,6 +15,12 @@ class ServerConfig:
     weights_small: str = field(default_factory=lambda: os.environ.get("MUSCRIPTOR_WEIGHTS_SMALL", ""))
     weights_medium: str = field(default_factory=lambda: os.environ.get("MUSCRIPTOR_WEIGHTS_MEDIUM", ""))
     weights_large: str = field(default_factory=lambda: os.environ.get("MUSCRIPTOR_WEIGHTS_LARGE", ""))
+    tab_model_dir: str = field(default_factory=lambda: os.environ.get("OPEN_FRET_MODEL_DIR", ""))
+    tab_model_revision: str = field(default_factory=lambda: os.environ.get("OPEN_FRET_MODEL_REVISION", "b8edf84f4b76a8bc03bc1d78255c77364fba72eb"))
+    tab_allow_download: bool = field(default_factory=lambda: os.environ.get("OPEN_FRET_ALLOW_DOWNLOAD", "false").lower() == "true")
+    tab_device: str = field(default_factory=lambda: os.environ.get("OPEN_FRET_DEVICE", "cpu"))
+    tab_timeout_s: int = field(default_factory=lambda: int(os.environ.get("OPEN_FRET_TIMEOUT_S", "300")))
+    tab_max_notes: int = field(default_factory=lambda: int(os.environ.get("OPEN_FRET_MAX_NOTES", "20000")))
 
     def weights_for(self, size: str) -> str:
         """Resolve server-owned weights without accepting arbitrary paths from jobs."""

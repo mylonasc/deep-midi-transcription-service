@@ -59,6 +59,7 @@ class JobConfig(BaseModel):
     yt_dlp: YtDlpPolicy = Field(default_factory=YtDlpPolicy)
     transcription: TranscriptionOptions = Field(default_factory=TranscriptionOptions)
     extensions: dict = Field(default_factory=dict)
+    tablature: Literal["off", "auto"] = "off"
 
 
 class JobProgress(BaseModel):
@@ -80,6 +81,7 @@ class Job(BaseModel):
     events_key: str | None = None
     error: str | None = None
     retry_count: int = Field(default=0, ge=0)
+    auto_tablature_message: str | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 

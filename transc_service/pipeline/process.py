@@ -6,6 +6,27 @@ import signal
 import sys
 from collections import deque
 from pathlib import Path
+from contextlib import asynccontextmanager
+
+
+@asynccontextmanager
+async def compute_slot(semaphore, cancel):
+    """Cancel waiting work without leaking a concurrently granted permit."""
+    acquired = asyncio.create_task(semaphore.acquire())
+    cancelled = asyncio.create_task(cancel.wait())
+    try:
+        await asyncio.wait({acquired, cancelled}, return_when=asyncio.FIRST_COMPLETED)
+        if cancel.is_set():
+            raise asyncio.CancelledError
+        await acquired
+        yield
+    finally:
+        cancelled.cancel()
+        if not acquired.done():
+            acquired.cancel()
+        await asyncio.gather(acquired, cancelled, return_exceptions=True)
+        if not acquired.cancelled() and acquired.exception() is None:
+            semaphore.release()
 
 
 async def run_stage(stage, payload, directory: Path, cancel, progress_cb=None):

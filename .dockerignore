@@ -5,3 +5,7 @@ __pycache__
 *.mp3
 *.mid
 data
+**/node_modules
+.git
+.env
+~

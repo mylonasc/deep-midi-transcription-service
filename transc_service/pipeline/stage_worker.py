@@ -25,7 +25,7 @@ async def main():
         emit("result", {"path": str(path), "info": {
             "title": info.get("title"), "duration": info.get("duration"),
         }})
-    else:
+    elif stage == "transcribe":
         from .transcriber import _transcribe_audio, events_to_jsonable
         from ..models import TranscriptionOptions
         midi, events = await _transcribe_audio(
@@ -37,6 +37,18 @@ async def main():
         (directory / "events.json").write_text(json.dumps(events_to_jsonable(events)))
         emit("result", {"midi": str(directory / "out.mid"),
                         "events": str(directory / "events.json")})
+    elif stage == "tablature":
+        from ..tablature.adapter import generate
+        from ..tablature.models import TablatureOptions
+        result = generate(Path(payload["midi"]).read_bytes(),
+                          TablatureOptions.model_validate(payload["options"]),
+                          lambda phase, done, total: emit("progress", [phase, done, total]))
+        directory = Path(request).parent
+        for name, content in result.items():
+            (directory / name).write_bytes(content)
+        emit("result", {name: str(directory / name) for name in result})
+    else:
+        raise ValueError(f"Unknown pipeline stage: {stage}")
 
 
 if __name__ == "__main__":

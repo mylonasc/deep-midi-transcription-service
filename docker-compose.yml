@@ -2,7 +2,7 @@ services:
   api:
     build: .
     ports:
-      - "8000:8001"
+      - "8000:8000"
     volumes:
       - data:/data
       # Mount the full hub so snapshot symlinks into blobs remain valid.
@@ -18,6 +18,12 @@ services:
       MUSCRIPTOR_WEIGHTS_SMALL: ${MUSCRIPTOR_WEIGHTS_SMALL:-}
       MUSCRIPTOR_WEIGHTS_MEDIUM: ${MUSCRIPTOR_WEIGHTS_MEDIUM:-}
       MUSCRIPTOR_WEIGHTS_LARGE: ${MUSCRIPTOR_WEIGHTS_LARGE:-}
+      OPEN_FRET_MODEL_DIR: ${OPEN_FRET_MODEL_DIR:-}
+      OPEN_FRET_MODEL_REVISION: ${OPEN_FRET_MODEL_REVISION:-b8edf84f4b76a8bc03bc1d78255c77364fba72eb}
+      OPEN_FRET_ALLOW_DOWNLOAD: ${OPEN_FRET_ALLOW_DOWNLOAD:-false}
+      OPEN_FRET_DEVICE: cpu
+      OPEN_FRET_TIMEOUT_S: ${OPEN_FRET_TIMEOUT_S:-300}
+      OPEN_FRET_MAX_NOTES: ${OPEN_FRET_MAX_NOTES:-20000}
     init: true
     stop_grace_period: 30s
     healthcheck:

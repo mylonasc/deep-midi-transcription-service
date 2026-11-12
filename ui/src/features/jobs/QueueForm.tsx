@@ -8,6 +8,7 @@ export default function QueueForm({ onQueued }: { onQueued: (job: Job) => void }
   const [model, setModel] = useState("medium");
   const [maxDur, setMaxDur] = useState(600);
   const [allowMix, setAllowMix] = useState(false);
+  const [autoTab, setAutoTab] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -16,7 +17,7 @@ export default function QueueForm({ onQueued }: { onQueued: (job: Job) => void }
     setError(null);
     setSubmitting(true);
     try {
-      onQueued(await api.create(url.trim(), model, maxDur, allowMix));
+      onQueued(await api.create(url.trim(), model, maxDur, allowMix, autoTab));
       setUrl("");
     } catch (reason) { setError(String(reason)); }
     finally { setSubmitting(false); }
@@ -36,6 +37,7 @@ export default function QueueForm({ onQueued }: { onQueued: (job: Job) => void }
         <div><label htmlFor="duration">Max duration (seconds)</label><input id="duration" type="number" min={1} required value={maxDur} onChange={event => setMaxDur(Number(event.target.value))} /></div>
       </div>
       <label className="checkbox-label"><input type="checkbox" checked={allowMix} onChange={event => setAllowMix(event.target.checked)} />Allow mixes</label>
+      <label className="checkbox-label"><input type="checkbox" checked={autoTab} onChange={event => setAutoTab(event.target.checked)} />Generate guitar tablature automatically when one eligible guitar part is found</label>
       <ModelHealth selectedModel={model} />
       <button className="button-primary submit-button" type="submit" disabled={submitting || !url.trim() || !Number.isFinite(maxDur) || maxDur < 1}>{submitting ? "Queuing…" : "Queue transcription"}</button>
       <p className="form-hint">One video per job. Larger models need more time and memory.</p>

@@ -171,3 +171,5 @@ footer { color: var(--muted); font-size: .75rem; text-align: center; padding: 32
   .job-card { padding: 20px; }
 }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .skeleton { animation: none; } }
+/* Generated-tab diagnostics must wrap instead of widening the mobile viewport. */
+.tab-error { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 100%; }
